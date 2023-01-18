@@ -41,7 +41,7 @@ class DR(bt.Strategy):
         #ODR Vars
         self.odr_session_vars = {
             'session': [300, 430, 200],
-            'hourongoing_flag': False, 
+            'hourpassed_flag': False, 
             'dr_high': None,
             'dr_low': None,
             'idr_high': None,
@@ -54,7 +54,7 @@ class DR(bt.Strategy):
         #ADR Vars
         self.adr_session_vars = {
             'session': [1930, 2030, 830],
-            'hourongoing_flag': False, 
+            'hourpassed_flag': False, 
             'dr_high': None,
             'dr_low': None,
             'idr_high': None,
@@ -105,11 +105,11 @@ class DR(bt.Strategy):
         session_vars = [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]
 
         for session in session_vars:
-            if session['hourongoing_flag'] == False:
+            if session['hourpassed_flag'] == False:
                 # Check if the session's defining hour has passed
                 if self.data.datetime.time() > datetime.time(self.session['session'[1]]):
                     # Update flag if it has
-                    self.session['hourongoing_flag'] = True
+                    self.session['hourpassed_flag'] = True
                 else:
                     #update prices if session's defining hour is still ongoing
                     #update dr's
@@ -125,34 +125,33 @@ class DR(bt.Strategy):
                         self.session['idr_high'] = self.data.high[0]
 
             else:
-                if session['valid_flag'] == False:
-                    #Check if session is valid
-                    if self.data.datetime.time() < datetime.time(self.session['session'[2]]):
-                        #Update valid flag
-                        session['valid_flag'] = True
-                        #before checking for early confirmation and confirmation check if there has already been an early confirmation
-                        if self.session['ec'] == None:
-                            return
-                        else:
+                #Check if session is valid
+                if self.data.datetime.time() < datetime.time(self.session['session'[2]]):
+                    #Update valid flag
+                    session['valid_flag'] = True
+                    #before checking for early confirmation and confirmation check if there has already been an early confirmation
+                    if self.session['ec'] == None:
                         #check if price closes higher than the dr
-                            if self.data.close[0] > self.session['dr_high']:
-                                self.session['ec'] = 2
-                                #define variable for the timestamp when early indication high occured
+                        if self.data.close[0] > self.session['dr_high']:
+                            self.session['ec'] = 2
+                            #define variable for the timestamp when early indication high occured
+                            self.exportdata['e_ec_timestamp'] = self.data.datetime.time()
+                        else:
+                            #check if price closes lower than the dr
+                            if self.data.close[0] < self.session['dr_low']:
+                                self.session['ec'] = 1
+                                #define variable for timestamp when early indication low occured
                                 self.exportdata['e_ec_timestamp'] = self.data.datetime.time()
-
-                            else:
-                                #check if price closes lower than the dr
-                                if self.data.close[0] < self.session['dr_low']:
-                                    self.session['ec'] = 1
-                                    #define variable for timestamp when early indication low occured
-                                    self.exportdata['e_ec_timestamp'] = self.data.datetime.time()
-
-                            if self.data.close[0] > self.session['idr_high']:
-                                self.session['c'] = 2
-                            else:
-                                #check if price closes lower than the idr
-                                if self.data.close[0] < self.session['idr_low']:
-                                    self.session['c'] = 1
+                        if self.data.close[0] > self.session['idr_high']:
+                            self.session['c'] = 2
+                        else:
+                            #check if price closes lower than the idr
+                            if self.data.close[0] < self.session['idr_low']:
+                                self.session['c'] = 1
+                    else:
+                    
+                else:
+                    session['valid_flag'] = False
             
             #Check if early confirmation has occured than check if the value has been changed from none to 1 or 2
             if self.session['ec'] != None:
