@@ -126,7 +126,7 @@ class DR(bt.Strategy):
                 #Check if session is valid
                 if self.data.datetime.time() < datetime.time(self.session['session'[2]]):
                     #Update valid flag
-                    session['valid_flag'] = True
+                    self.session['valid_flag'] = True
                     #Check for breaks in DR and IDR Levels and store them in list
                     #following code is supposed to be in session loop
                     class breakdirection(enum):
@@ -135,9 +135,9 @@ class DR(bt.Strategy):
 
                     def breaklevel(open_price, close_price, level):
                         if open_price <= level <= close_price:
-                            return BreakDirection.BROKE_BELOW
+                            return breakdirection.BROKE_BELOW
                         elif open_price >= level >= close_price:
-                            return BreakDirection.BROKE_ABOVE
+                            return breakdirection.BROKE_ABOVE
 
                         levels = [dr_low, idr_low, dr_high, idr_high]
                         open_price, close_price = self.data.open[0], self.data.close[0]
