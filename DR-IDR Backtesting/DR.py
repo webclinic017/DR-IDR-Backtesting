@@ -35,7 +35,11 @@ class DR(bt.Strategy):
             'idr_low': None,                #Var to store idr low
             'valid_flag': False,            #Var to determine if session is still valid (Valid = True)
             'ec': None,                     #Var to determine if early confirmation has occured and if its high or low (None=notset 1=earlylow 2=earlyhigh)
-            'c': None                       #VVar to determine if confirmation has occured and if its high or low (None=notset 1=confirmedlow 2=confirmedhigh)
+            'c': None,                      #VVar to determine if confirmation has occured and if its high or low (None=notset 1=confirmedlow 2=confirmedhigh)
+            'additional_dr_break_low': [],      #Array that only holds values once there has been multiple breaks of the dr low
+            'additional_dr_break_high': [],     #Array that only holds values once there has been multiple breaks of the dr high
+            'additional_idr_break_low': [],     #Array that only holds values once there has been multiple breaks of the idr low
+            'additional_idr_break_high': []     #Array that only holds values once there has been multiple breaks of the idr high
             }
 
         #ODR Vars
@@ -48,7 +52,11 @@ class DR(bt.Strategy):
             'idr_low': None,
             'valid_flag': False,
             'ec': None,
-            'c': None
+            'c': None,
+            'additional_dr_break_low': [],
+            'additional_dr_break_high': [],
+            'additional_idr_break_low': [],
+            'additional_idr_break_high': []
         }
 
         #ADR Vars
@@ -61,7 +69,11 @@ class DR(bt.Strategy):
             'idr_low': None,
             'valid_flag': False,
             'ec': None,
-            'c': None
+            'c': None,
+            'additional_dr_break_low': [],
+            'additional_dr_break_high': [],
+            'additional_idr_break_low': [],
+            'additional_idr_break_high': []
         }
 
         #Variables to be exportet in the determined data
@@ -101,6 +113,42 @@ class DR(bt.Strategy):
     
 
     def next(self):
+        
+        """following code is supposed to be in session loop
+        class breakdirection(enum):
+            BROKE_BELOW = 1
+            BROKE_ABOVE = 2
+
+        def breaklevel(open_price, close_price, level):
+            if open_price <= level <= close_price:
+                return BreakDirection.BROKE_BELOW
+            elif open_price >= level >= close_price:
+                return BreakDirection.BROKE_ABOVE
+
+            levels = [dr_low, dr_high, idr_low, idr_high]
+            open_price, close_price = self.data.open[0], self.data.close[0]
+
+            for level in levels:
+                result = breaklevel(open_price, close_price, level)
+                if result == BreakDirection.BROKE_BELOW:
+                    ec = result.value
+                elif result == BreakDirection.BROKE_ABOVE:
+                    c = result.value
+                    """
+
+
+        #Code has been refined above and will be removed in next commit
+        #def breaklevel(open, close, level):
+         #   if open >= level and close < level:
+          #      return('brokebelow')
+           # if open <= level and close > level:
+            #    return('brokeabove')
+
+        #if breaklevel(self.data.open[0], self.data.close[0], dr_low) == 'brokebelow': ec = 1
+        #if breaklevel(self.data.open[0], self.data.close[0], dr_high) == 'brokeabove': ec = 2
+
+        #if breaklevel(self.data.open[0], self.data.close[0], idr_low) == 'brokebelow': c = 1
+        #if breaklevel(self.data.open[0], self.data.close[0], idr_high) == 'brokeabove': c = 2
 
         session_vars = [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]
 
@@ -132,7 +180,7 @@ class DR(bt.Strategy):
                     #before checking for early confirmation and confirmation check if there has already been an early confirmation
                     if self.session['ec'] == None:
                         #check if price closes higher than the dr
-                        if self.data.close[0] > self.session['dr_high']:
+                        if self.data.open[0] < self.session['dr_high'] and self.data.close[0] > self.session['dr_high']:
                             self.session['ec'] = 2
                             #define variable for the timestamp when early indication high occured
                             self.exportdata['e_ec_timestamp'] = self.data.datetime.time()
@@ -149,7 +197,9 @@ class DR(bt.Strategy):
                             if self.data.close[0] < self.session['idr_low']:
                                 self.session['c'] = 1
                     else:
-                    
+                        #check if price opens lower and closes higher than the dr
+                        if self.data.open[0] > self.session['dr_low'] and self.data.close[0] < self.session['dr_low']
+
                 else:
                     session['valid_flag'] = False
             
