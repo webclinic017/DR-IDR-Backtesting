@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division, print_function,
 import datetime  # For datetime objects
 import os.path  # To manage paths
 import sys  # To find out the script name (in argv[0])
+import csv
 
 # Import the backtrader platform
 import backtrader as bt
@@ -34,12 +35,7 @@ class DR(bt.Strategy):
             'idr_high': None,               #Var to store idr high
             'idr_low': None,                #Var to store idr low
             'valid_flag': False,            #Var to determine if session is still valid (Valid = True)
-            'ec': None,                     #Var to determine if early confirmation has occured and if its high or low (None=notset 1=earlylow 2=earlyhigh)
-            'c': None,                      #VVar to determine if confirmation has occured and if its high or low (None=notset 1=confirmedlow 2=confirmedhigh)
-            'additional_dr_break_low': [],      #Array that only holds values once there has been multiple breaks of the dr low
-            'additional_dr_break_high': [],     #Array that only holds values once there has been multiple breaks of the dr high
-            'additional_idr_break_low': [],     #Array that only holds values once there has been multiple breaks of the idr low
-            'additional_idr_break_high': []     #Array that only holds values once there has been multiple breaks of the idr high
+            'levelbreaks': [],              #Variable to store all the breaks of relevant levels
             }
 
         #ODR Vars
@@ -51,12 +47,7 @@ class DR(bt.Strategy):
             'idr_high': None,
             'idr_low': None,
             'valid_flag': False,
-            'ec': None,
-            'c': None,
-            'additional_dr_break_low': [],
-            'additional_dr_break_high': [],
-            'additional_idr_break_low': [],
-            'additional_idr_break_high': []
+            'levelbreaks': [],
         }
 
         #ADR Vars
@@ -68,12 +59,7 @@ class DR(bt.Strategy):
             'idr_high': None,
             'idr_low': None,
             'valid_flag': False,
-            'ec': None,
-            'c': None,
-            'additional_dr_break_low': [],
-            'additional_dr_break_high': [],
-            'additional_idr_break_low': [],
-            'additional_idr_break_high': []
+            'levelbreaks': [],
         }
 
         #Variables to be exportet in the determined data
@@ -113,42 +99,6 @@ class DR(bt.Strategy):
     
 
     def next(self):
-        
-        """following code is supposed to be in session loop
-        class breakdirection(enum):
-            BROKE_BELOW = 1
-            BROKE_ABOVE = 2
-
-        def breaklevel(open_price, close_price, level):
-            if open_price <= level <= close_price:
-                return BreakDirection.BROKE_BELOW
-            elif open_price >= level >= close_price:
-                return BreakDirection.BROKE_ABOVE
-
-            levels = [dr_low, dr_high, idr_low, idr_high]
-            open_price, close_price = self.data.open[0], self.data.close[0]
-
-            for level in levels:
-                result = breaklevel(open_price, close_price, level)
-                if result == BreakDirection.BROKE_BELOW:
-                    ec = result.value
-                elif result == BreakDirection.BROKE_ABOVE:
-                    c = result.value
-                    """
-
-
-        #Code has been refined above and will be removed in next commit
-        #def breaklevel(open, close, level):
-         #   if open >= level and close < level:
-          #      return('brokebelow')
-           # if open <= level and close > level:
-            #    return('brokeabove')
-
-        #if breaklevel(self.data.open[0], self.data.close[0], dr_low) == 'brokebelow': ec = 1
-        #if breaklevel(self.data.open[0], self.data.close[0], dr_high) == 'brokeabove': ec = 2
-
-        #if breaklevel(self.data.open[0], self.data.close[0], idr_low) == 'brokebelow': c = 1
-        #if breaklevel(self.data.open[0], self.data.close[0], idr_high) == 'brokeabove': c = 2
 
         session_vars = [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]
 
@@ -177,74 +127,40 @@ class DR(bt.Strategy):
                 if self.data.datetime.time() < datetime.time(self.session['session'[2]]):
                     #Update valid flag
                     session['valid_flag'] = True
-                    #before checking for early confirmation and confirmation check if there has already been an early confirmation
-                    if self.session['ec'] == None:
-                        #check if price closes higher than the dr
-                        if self.data.open[0] < self.session['dr_high'] and self.data.close[0] > self.session['dr_high']:
-                            self.session['ec'] = 2
-                            #define variable for the timestamp when early indication high occured
-                            self.exportdata['e_ec_timestamp'] = self.data.datetime.time()
-                        else:
-                            #check if price closes lower than the dr
-                            if self.data.close[0] < self.session['dr_low']:
-                                self.session['ec'] = 1
-                                #define variable for timestamp when early indication low occured
-                                self.exportdata['e_ec_timestamp'] = self.data.datetime.time()
-                        if self.data.close[0] > self.session['idr_high']:
-                            self.session['c'] = 2
-                        else:
-                            #check if price closes lower than the idr
-                            if self.data.close[0] < self.session['idr_low']:
-                                self.session['c'] = 1
-                    else:
-                        #check if price opens lower and closes higher than the dr
-                        if self.data.open[0] > self.session['dr_low'] and self.data.close[0] < self.session['dr_low']
+                    #Check for breaks in DR and IDR Levels and store them in list
+                    #following code is supposed to be in session loop
+                    class breakdirection(enum):
+                        BROKE_BELOW = 1
+                        BROKE_ABOVE = 2
+
+                    def breaklevel(open_price, close_price, level):
+                        if open_price <= level <= close_price:
+                            return BreakDirection.BROKE_BELOW
+                        elif open_price >= level >= close_price:
+                            return BreakDirection.BROKE_ABOVE
+
+                        levels = [dr_low, idr_low, dr_high, idr_high]
+                        open_price, close_price = self.data.open[0], self.data.close[0]
+
+                        for level in levels:
+                            result = breaklevel(open_price, close_price, level)
+                            self.session.['levelbreaks'].append(session, self.data.datetime.time(), level, result, open_price, close_price, levels)
 
                 else:
                     session['valid_flag'] = False
-            
-            #Check if early confirmation has occured than check if the value has been changed from none to 1 or 2
-            if self.session['ec'] != None:
-                #Check if early confirmation has occured as a low
-                if self.session['ec'] == 1:
-                    #Check if early confirmation holds by comparing current price to the idr high
-                    if self.data.price[0] > self.session['idr_high']:
-                        #If the price is higher than idr high the early confirmation hasnt held and we update the indicating variable to false
-                        self.exportdata['e_ec_hold'] = False
-                    else:
-                        self.exportdata['e_ec_hold'] = True
-                else:
-                    if self.session['ex'] == 2:
-                        if self.data.price[0] < self.session['idr_low']:
-                            self.exportdata['e_c_hold'] = False
-                        else:
-                            self.exportdata['e_ec_hold'] = True
 
-            #Check if confirmation has occured than checking if the value has been changed from none to 1 or 2
-            if self.session['c'] != None:
-                #Check if confirmation has occured as a low
-                if self.session['c'] == 1:
-                    #Check if confirmation holds by comparing current price to the idr high
-                    if self.data.price[0] > self.session['idr_high']:
-                        #If the price is higher than idr high the confirmation hasnt held and we update the indicating variable to false
-                        self.exportdata['c_hold'] = False
-                    else:
-                        self.exportdata['c_hold'] = True
-                else:
-                    if self.session['c'] == 2:
-                        if self.data.price[0] < self.session['idr_low']:
-                            self.exportdata['c_hold'] = False
-                        else:
-                            self.exportdata['c_hold'] = True
-
+            def output(self):
+                with open("output.csv", "w") as f:
+                writer = csv.writer(f)
+                writer.writerows(session)
 
 if __name__ == '__main__':
     # Create a cerebro entity
     cerebro = bt.Cerebro()
 
     #Add a strategy
-    strats = cerebro.optstrategy(
-        DR,)
+    #note that I changed the following line to not have a line break and a comma fter "DR" 20.01.2023 09:11
+    strats = cerebro.optstrategy(DR)
 
     # Datas are in a subfolder of the samples. Need to find where the script is
     # because it could have been called from anywhere
@@ -264,14 +180,15 @@ if __name__ == '__main__':
     # Add the Data Feed to Cerebro
     cerebro.adddata(data)
 
+    #Following lines are not really needed right now, I'll just comment it out rn
     # Set our desired cash start
-    cerebro.broker.setcash(100000.0)
+    #cerebro.broker.setcash(100000.0)
 
     # Add a FixedSize sizer according to the stake
-    cerebro.addsizer(bt.sizers.FixedSize, stake=10)
+    #cerebro.addsizer(bt.sizers.FixedSize, stake=10)
 
     # Set the commision to 0.1%
-    cerebro.broker.setcommission(commission=0.001)
+    #cerebro.broker.setcommission(commission=0.001)
 
     # Print out the starting conditions
     #print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
