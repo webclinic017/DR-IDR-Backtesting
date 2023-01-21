@@ -72,13 +72,7 @@ class DR(bt.Strategy):
             'valid_flag': False,
             'levelbreaks': [],
         }
-
-        #To keep track of pending orders
-        self.order = None
-        self.buyprice = None
-        self.buycomm = None
     
-
     def next(self):
 
         session_variables = [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]
@@ -130,11 +124,6 @@ class DR(bt.Strategy):
                 else:
                     session_variables['valid_flag'] = False
 
-            #def output(self):
-            #    with open("output.csv", "w") as f:
-            #    writer = csv.writer(f)
-            #    writer.writerows(session)
-
             np.savetxt('data.csv', (session_variables), delimiter=',')
 
 if __name__ == '__main__':
@@ -163,22 +152,5 @@ if __name__ == '__main__':
     # Add the Data Feed to Cerebro
     cerebro.adddata(data)
 
-    #Following lines are not really needed right now, I'll just comment it out rn
-    # Set our desired cash start
-    #cerebro.broker.setcash(100000.0)
-
-    # Add a FixedSize sizer according to the stake
-    #cerebro.addsizer(bt.sizers.FixedSize, stake=10)
-
-    # Set the commision to 0.1%
-    #cerebro.broker.setcommission(commission=0.001)
-
-    # Print out the starting conditions
-    #print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
-
     # Run over everything
     cerebro.run(maxcpus=1)
-    #cerebro.plot()
-
-    # Print out the final result
-    #print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
