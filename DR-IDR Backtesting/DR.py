@@ -5,6 +5,8 @@ import datetime  # For datetime objects
 import os.path  # To manage paths
 import sys  # To find out the script name (in argv[0])
 import csv
+from enum import Enum
+import numpy as np
 
 # Import the backtrader platform
 import backtrader as bt
@@ -19,7 +21,7 @@ class DR(bt.Strategy):
     def log(self, txt, dt=None, doprint=False):
         ''' Logging function fot this strategy'''
         if self.params.printlog or doprint:
-            dt = dt or self.satas[0].datetime.date(0)
+            dt = dt or self.datas[0].datetime.date(0)
             print('%s, %s' % (dt.isoformat(), txt))
 
     def __init__(self):
@@ -31,9 +33,13 @@ class DR(bt.Strategy):
             'session': [930, 1030, 1300],   #Var defining start of session, end of session, and end of validity of session
             'hourpassed_flag': False,       #Var to determine if defining hour is still ongoing or if it has passed (if passed = true)
             'dr_high': None,                #Var to store dr high
+            'dr_high_timestamp': None,      #dr high timestamp
             'dr_low': None,                 #Var to store dr low
+            'dr_low_timestamp': None,       #dr low timestamp
             'idr_high': None,               #Var to store idr high
+            'idr_high_timestamp': None,
             'idr_low': None,                #Var to store idr low
+            'idr_low_timestamp': None,
             'valid_flag': False,            #Var to determine if session is still valid (Valid = True)
             'levelbreaks': [],              #Variable to store all the breaks of relevant levels
             }
@@ -43,9 +49,13 @@ class DR(bt.Strategy):
             'session': [300, 430, 200],
             'hourpassed_flag': False, 
             'dr_high': None,
+            'dr_high_timestamp': None,
             'dr_low': None,
+            'dr_low_timestamp': None,
             'idr_high': None,
+            'idr_high_timestamp': None,
             'idr_low': None,
+            'odr_low_timestamp': None,
             'valid_flag': False,
             'levelbreaks': [],
         }
@@ -55,41 +65,12 @@ class DR(bt.Strategy):
             'session': [1930, 2030, 830],
             'hourpassed_flag': False, 
             'dr_high': None,
+            'dr_high_timestamp': None,
             'dr_low': None,
             'idr_high': None,
             'idr_low': None,
             'valid_flag': False,
             'levelbreaks': [],
-        }
-
-        #Variables to be exportet in the determined data
-        self.exportdata = {
-        'session': None,                    #which session (RDR, ORD, ADR)
-        
-        'e_dr_high': None,                  #dr high price
-        'e_dr_high_timestamp': None,        #dr high timestamp
-        'e_dr_low': None,                   #dr low price
-        'e_dr_low_timestamp': None,         #dr low timestamp
-        'e_idr_high': None,                 #idr high price
-        'e_idr_high_timestamp': None,       #idr high timestamp
-        'e_idr_low': None,                  #idr low price
-        'e_idr_low_timestamp': None,        #idr low timestamp
-
-        'e_ec': None,                       #close price higher or lower than dr
-        'e_ec_timestamp': None,             #timestamp when the early confirmation occured
-        'e_c': None,                        #close price higher or lower than idr
-        'e_c_timestamp': None,              #timestamp when the confirmation occured
-
-        'e_ec_hold': False,                 #Variable showing if early indication held true
-        'e_ec_break_timestamp': None,       #Variable showing timestamp when early confirmation broke
-        'e_c_hold': False,                  #Variable showing if confirmation held
-        'e_c_break_timestamp': None,        #Variable showing timestamp when confirmation broke
-
-        'e_max_sd': None,                   #Variable storing the maximum standard deviation reached
-        'e_max_sd_timestamp': None,         #Variable storing the timestamp of when the maximum standard deviation has been hit
-        'e_min_sd': None,                   #Variable storing the lowest standard deviation reached
-        'e_max_sd_timestamp': None,         #Variable storing the timestamp of when the lowest standard deviation has been hit
-
         }
 
         #To keep track of pending orders
@@ -100,36 +81,36 @@ class DR(bt.Strategy):
 
     def next(self):
 
-        session_vars = [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]
+        session_variables = [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]
 
-        for session in session_vars:
-            if session['hourpassed_flag'] == False:
+        for session_variables in session_variables:
+            if session_variables['hourpassed_flag'] == False:
                 # Check if the session's defining hour has passed
-                if self.data.datetime.time() > datetime.time(self.session['session'[1]]):
+                if self.data.datetime.time() > datetime.time(session_variables['session'][1]):
                     # Update flag if it has
-                    self.session['hourpassed_flag'] = True
+                    session_variables['hourpassed_flag'] = True
                 else:
                     #update prices if session's defining hour is still ongoing
                     #update dr's
-                    if self.data.close[0] > self.session['dr_high']:
-                        self.session['dr_high'] = self.data.close[0]
-                    if self.data.close[0] < self.session['dr_low']:
-                        self.session['dr_low'] = self.data.close[0]
+                    if self.data.close[0] > session_variables['dr_high']:
+                        session_variables['dr_high'] = self.data.close[0]
+                    if self.data.close[0] < session_variables['dr_low']:
+                        session_variables['dr_low'] = self.data.close[0]
                     
                     #update idr's
-                    if self.data.high[0] > self.session['idr_high']:
-                        self.session['idr_high'] = self.data.high[0]
-                    if self.data.high[0] > self.session['idr_high']:
-                        self.session['idr_high'] = self.data.high[0]
+                    if self.data.high[0] > session_variables['idr_high']:
+                        session_variables['idr_high'] = self.data.high[0]
+                    if self.data.high[0] > session_variables['idr_high']:
+                        session_variables['idr_high'] = self.data.high[0]
 
             else:
                 #Check if session is valid
-                if self.data.datetime.time() < datetime.time(self.session['session'[2]]):
+                if self.data.datetime.time() < datetime.datetime(session_variables['session'[2]]):
                     #Update valid flag
-                    self.session['valid_flag'] = True
+                    session_variables['valid_flag'] = True
                     #Check for breaks in DR and IDR Levels and store them in list
                     #following code is supposed to be in session loop
-                    class breakdirection(enum):
+                    class breakdirection(Enum):
                         BROKE_BELOW = 1
                         BROKE_ABOVE = 2
 
@@ -139,20 +120,22 @@ class DR(bt.Strategy):
                         elif open_price >= level >= close_price:
                             return breakdirection.BROKE_ABOVE
 
-                        levels = [dr_low, idr_low, dr_high, idr_high]
+                        levels = [session_variables['dr_low'], session_variables['idr_low'], session_variables['dr_high'], session_variables['idr_high']]
                         open_price, close_price = self.data.open[0], self.data.close[0]
 
                         for level in levels:
                             result = breaklevel(open_price, close_price, level)
-                            self.session.['levelbreaks'].append(session, self.data.datetime.time(), level, result, open_price, close_price, levels)
+                            session_variables['levelbreaks'].append(session_variables, self.data.datetime.time(), level, result, open_price, close_price, levels)
 
                 else:
-                    session['valid_flag'] = False
+                    session_variables['valid_flag'] = False
 
-            def output(self):
-                with open("output.csv", "w") as f:
-                writer = csv.writer(f)
-                writer.writerows(session)
+            #def output(self):
+            #    with open("output.csv", "w") as f:
+            #    writer = csv.writer(f)
+            #    writer.writerows(session)
+
+            np.savetxt('data.csv', (session_variables), delimiter=',')
 
 if __name__ == '__main__':
     # Create a cerebro entity
