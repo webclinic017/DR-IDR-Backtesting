@@ -17,15 +17,11 @@ import backtrader as bt
 class DR(bt.Strategy):
 
     def __init__(self):
-        # open a csv file to store the results
-        self.csvfile = open('session_results.csv', 'w', newline='')
-        self.csvwriter = csv.writer(self.csvfile)
-        self.csvwriter.writerow(['session_name', 'dr_high', 'dr_high_timestamp', 'dr_low', 'dr_low_timestamp', 'idr_high', 'idr_high_timestamp', 'idr_low', 'idr_low_timestamp', 'valid_flag'])
-        
+
         #RDR Vars
         self.rdr_session_vars = {
-            'session': [930, 1030, 1300],   #Var defining start of session, end of session, and end of validity of session
-            'hourpassed_flag': False,       #Var to determine if defining hour is still ongoing or if it has passed (if passed = true)
+            'session_name': 'RDR',
+            'session_hours': [930, 1030, 1300],   #Var defining start of session, end of session, and end of validity of session
             'dr_high': None,                #Var to store dr high
             'dr_high_timestamp': None,      #dr high timestamp
             'dr_low': None,                 #Var to store dr low
@@ -34,14 +30,13 @@ class DR(bt.Strategy):
             'idr_high_timestamp': None,
             'idr_low': None,                #Var to store idr low
             'idr_low_timestamp': None,
-            'valid_flag': False,            #Var to determine if session is still valid (Valid = True)
             'levelbreaks': [],              #Variable to store all the breaks of relevant levels
             }
 
         #ODR Vars
         self.odr_session_vars = {
-            'session': [300, 430, 200],
-            'hourpassed_flag': False, 
+            'session_name': 'ODR',
+            'session_hours': [300, 430, 200],
             'dr_high': None,
             'dr_high_timestamp': None,
             'dr_low': None,
@@ -49,15 +44,14 @@ class DR(bt.Strategy):
             'idr_high': None,
             'idr_high_timestamp': None,
             'idr_low': None,
-            'odr_low_timestamp': None,
-            'valid_flag': False,
+            'idr_low_timestamp': None,
             'levelbreaks': [],
         }
 
         #ADR Vars
         self.adr_session_vars = {
-            'session': [1930, 2030, 830],
-            'hourpassed_flag': False, 
+            'session_name': 'ADR',
+            'session_hours': [1930, 2030, 830],
             'dr_high': None,
             'dr_high_timestamp': None,
             'dr_low': None,
@@ -65,21 +59,50 @@ class DR(bt.Strategy):
             'idr_high': None,
             'idr_high_timestamp': None,
             'idr_low': None,
-            'odr_low_timestamp': None,
-            'valid_flag': False,
+            'idr_low_timestamp': None,
             'levelbreaks': [],
         }
+
+        # open a csv file to store the results
+        self.csvfile = open('session_results.csv', 'a', newline='') 
+        self.csvwriter = csv.writer(self.csvfile)
+        self.csvwriter.writerow(['session_name', 'dr_high', 'dr_high_timestamp', 'dr_low', 'dr_low_timestamp', 'idr_high', 'idr_high_timestamp', 'idr_low', 'idr_low_timestamp', 'levelbreaks'])
     
     def next(self):
-
+        print("Reached next()")
+        #For every session check if hour has passed or not
         for session_variables in [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]:
-            if session_variables['hourpassed_flag'] == False:
-                hour = int(session_variables['session'][1]) % 12 if int(session_variables['session'][1]) > 12 else int(session_variables['session'][1])
+                hour = int(session_variables['session_hours'][1]) % 12 if int(session_variables['session_hours'][1]) > 12 else int(session_variables['session_hours'][1])
                 # Check if the session's defining hour has passed
                 if self.data.datetime.time().hour > hour:
-                    # Update flag if it has
-                    session_variables['hourpassed_flag'] = True
+                    print("Defining hour has passed")
+                    #Check if session is valid
+                    if self.data.datetime.time().hour < int(session_variables['session_hours'][2]):
+                        #Check for breaks in DR and IDR Levels and store them in list
+                        #following code is supposed to be in session loop
+                        class breakdirection(Enum):
+                            BROKE_BELOW = 1
+                            BROKE_ABOVE = 2
+
+                        def breaklevel(open_price, close_price, level):
+                            if open_price <= level <= close_price:
+                                return breakdirection.BROKE_BELOW
+                            elif open_price >= level >= close_price:
+                                return breakdirection.BROKE_ABOVE
+
+                            levels = [session_variables['dr_low'], session_variables['idr_low'], session_variables['dr_high'], session_variables['idr_high']]
+                            open_price, close_price = self.data.open[0], self.data.close[0]
+
+                            for level in levels:
+                                result = breaklevel(open_price, close_price, level)
+                                session_variables['levelbreaks'].append(session_variables, self.data.datetime.time(), level, result, open_price, close_price, levels)
+                    else:
+
+                        self.csvwriter.writerow([session_variables['session_name'], session_variables['dr_high'], session_variables['dr_high_timestamp'], session_variables['dr_low'], session_variables['dr_low_timestamp'], session_variables['idr_high'], session_variables['idr_high_timestamp'], session_variables['idr_low'], session_variables['idr_low_timestamp'], session_variables['levelbreaks']])
+                        self.csvfile.flush()
+
                 else:
+                    print("Defining hour is ongoing; update prices")
                     #update prices if session's defining hour is still ongoing
                     #update dr's
                     if self.data.close[0] > session_variables['dr_high']:
@@ -92,48 +115,6 @@ class DR(bt.Strategy):
                         session_variables['idr_high'] = self.data.high[0]
                     if self.data.high[0] > session_variables['idr_high']:
                         session_variables['idr_high'] = self.data.high[0]
-
-            else:
-                #Check if session is valid
-                if self.data.datetime.time().hour < int(session_variables['session'][2]):
-                    #Update valid flag
-                    session_variables['valid_flag'] = True
-                    #Check for breaks in DR and IDR Levels and store them in list
-                    #following code is supposed to be in session loop
-                    class breakdirection(Enum):
-                        BROKE_BELOW = 1
-                        BROKE_ABOVE = 2
-
-                    def breaklevel(open_price, close_price, level):
-                        if open_price <= level <= close_price:
-                            return breakdirection.BROKE_BELOW
-                        elif open_price >= level >= close_price:
-                            return breakdirection.BROKE_ABOVE
-
-                        levels = [session_variables['dr_low'], session_variables['idr_low'], session_variables['dr_high'], session_variables['idr_high']]
-                        open_price, close_price = self.data.open[0], self.data.close[0]
-
-                        for level in levels:
-                            result = breaklevel(open_price, close_price, level)
-                            session_variables['levelbreaks'].append(session_variables, self.data.datetime.time(), level, result, open_price, close_price, levels)
-
-                else:
-                    session_variables['valid_flag'] = False
-                    df = pd.DataFrame.from_dict(session_variables)
-                    df.to_csv('session_vars.csv', mode='a', header=False)
-
-            #np.savetxt('data.csv', (session_variables), delimiter=',')
-
-            #df = pd.DataFrame.from_dict(session_variables)
-            #df.to_csv("data.csv", index=False)
-#           Both, above and below dont make sense first of all because i should probably put the code which exports the data into csv file when the session is over, so in the code above when checking if session is valid
-            # Get the length of the first value in the dictionary
-            #length = len(next(iter(session_variables.values())))
-            #
-            ## Iterate through the dictionary and check the length of each value
-            #for key, value in session_variables.items():
-            #    if len(value) != length:
-            #        print(f'{key} has a different length: {len(value)}')
 
 if __name__ == '__main__':
     # Create a cerebro entity
