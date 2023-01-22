@@ -15,19 +15,12 @@ import backtrader as bt
 
 # Create a Stratey
 class DR(bt.Strategy):
-    params = (
-        ('printlog', False),
-    )
-
-    def log(self, txt, dt=None, doprint=False):
-        ''' Logging function fot this strategy'''
-        if self.params.printlog or doprint:
-            dt = dt or self.datas[0].datetime.date(0)
-            print('%s, %s' % (dt.isoformat(), txt))
 
     def __init__(self):
-        # Keep a reference to the "close" line in the data[0] dataseries
-        self.dataclose = self.datas[0].close
+        # open a csv file to store the results
+        self.csvfile = open('session_results.csv', 'w', newline='')
+        self.csvwriter = csv.writer(self.csvfile)
+        self.csvwriter.writerow(['session_name', 'dr_high', 'dr_high_timestamp', 'dr_low', 'dr_low_timestamp', 'idr_high', 'idr_high_timestamp', 'idr_low', 'idr_low_timestamp', 'valid_flag'])
         
         #RDR Vars
         self.rdr_session_vars = {
