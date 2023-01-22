@@ -78,6 +78,7 @@ class DR(bt.Strategy):
                     print("Defining hour has passed")
                     #Check if session is valid
                     if self.data.datetime.time().hour < int(session_variables['session_hours'][2]):
+                        print("Session is valid, checking for breaks in any relevant levels")
                         #Check for breaks in DR and IDR Levels and store them in list
                         #following code is supposed to be in session loop
                         class breakdirection(Enum):
@@ -97,7 +98,8 @@ class DR(bt.Strategy):
                                 result = breaklevel(open_price, close_price, level)
                                 session_variables['levelbreaks'].append(session_variables, self.data.datetime.time(), level, result, open_price, close_price, levels)
                     else:
-
+                        #Session is not valid; append variables to csv
+                        print("Session is not valid, adding relevant data to csv")
                         self.csvwriter.writerow([session_variables['session_name'], session_variables['dr_high'], session_variables['dr_high_timestamp'], session_variables['dr_low'], session_variables['dr_low_timestamp'], session_variables['idr_high'], session_variables['idr_high_timestamp'], session_variables['idr_low'], session_variables['idr_low_timestamp'], session_variables['levelbreaks']])
                         self.csvfile.flush()
 
