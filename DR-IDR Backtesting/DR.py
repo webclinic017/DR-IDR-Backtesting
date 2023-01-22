@@ -7,6 +7,7 @@ import sys  # To find out the script name (in argv[0])
 import csv
 from enum import Enum
 import numpy as np
+import pandas as pd
 
 # Import the backtrader platform
 import backtrader as bt
@@ -67,20 +68,22 @@ class DR(bt.Strategy):
             'dr_high': None,
             'dr_high_timestamp': None,
             'dr_low': None,
+            'dr_low_timestamp': None,
             'idr_high': None,
+            'idr_high_timestamp': None,
             'idr_low': None,
+            'odr_low_timestamp': None,
             'valid_flag': False,
             'levelbreaks': [],
         }
     
     def next(self):
 
-        session_variables = [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]
-
-        for session_variables in session_variables:
+        for session_variables in [self.rdr_session_vars, self.odr_session_vars, self.adr_session_vars]:
             if session_variables['hourpassed_flag'] == False:
+                hour = int(session_variables['session'][1]) % 12 if int(session_variables['session'][1]) > 12 else int(session_variables['session'][1])
                 # Check if the session's defining hour has passed
-                if self.data.datetime.time() > datetime.time(session_variables['session'][1]):
+                if self.data.datetime.time().hour > hour:
                     # Update flag if it has
                     session_variables['hourpassed_flag'] = True
                 else:
@@ -99,7 +102,7 @@ class DR(bt.Strategy):
 
             else:
                 #Check if session is valid
-                if self.data.datetime.time() < datetime.datetime(session_variables['session'[2]]):
+                if self.data.datetime.time().hour < int(session_variables['session'][2]):
                     #Update valid flag
                     session_variables['valid_flag'] = True
                     #Check for breaks in DR and IDR Levels and store them in list
@@ -123,8 +126,21 @@ class DR(bt.Strategy):
 
                 else:
                     session_variables['valid_flag'] = False
+                    df = pd.DataFrame.from_dict(session_variables)
+                    df.to_csv('session_vars.csv', mode='a', header=False)
 
-            np.savetxt('data.csv', (session_variables), delimiter=',')
+            #np.savetxt('data.csv', (session_variables), delimiter=',')
+
+            #df = pd.DataFrame.from_dict(session_variables)
+            #df.to_csv("data.csv", index=False)
+#           Both, above and below dont make sense first of all because i should probably put the code which exports the data into csv file when the session is over, so in the code above when checking if session is valid
+            # Get the length of the first value in the dictionary
+            #length = len(next(iter(session_variables.values())))
+            #
+            ## Iterate through the dictionary and check the length of each value
+            #for key, value in session_variables.items():
+            #    if len(value) != length:
+            #        print(f'{key} has a different length: {len(value)}')
 
 if __name__ == '__main__':
     # Create a cerebro entity
